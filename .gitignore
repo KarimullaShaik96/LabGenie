@@ -1,11 +1,2 @@
-backend/.venv/
-.venv/
-venv/
-__pycache__/
-*.pyc
-.env
-.env.*
-!.env.example
-node_modules/
-dist/
-build/
+# Created by pytest automatically.
+*
