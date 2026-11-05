@@ -1,23 +1,38 @@
-FROM python:3.12-slim
+# Multi-stage Dockerfile for LabGenie AI React Frontend
+
+# Stage 1: Build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Install system dependencies needed for compiling native extensions
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package*.json ./
+RUN npm install
 
 COPY . .
+RUN npm run build
 
-EXPOSE 8000
+# Stage 2: Production Nginx Server
+FROM nginx:alpine
 
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
+COPY --from=build /app/dist /usr/share/nginx/html
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Custom nginx SPA fallback config
+RUN echo 'server { \
+    listen 80; \
+    server_name localhost; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+    location /api { \
+        proxy_pass http://backend:8000; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
 
