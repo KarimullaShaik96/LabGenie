@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: labgenie_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-labgenie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-labgenie_secure_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-labgenie_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U labgenie -d labgenie_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: labgenie_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://labgenie:labgenie_secure_pass@db:5432/labgenie_db
+      SECRET_KEY: ${SECRET_KEY:-labgenie_super_secret_jwt_key_2026_production}
+      WATSONX_APIKEY: ${WATSONX_APIKEY:-}
+      WATSONX_PROJECT_ID: ${WATSONX_PROJECT_ID:-}
+      WATSONX_URL: ${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      WATSONX_MODEL_ID: ${WATSONX_MODEL_ID:-ibm/granite-3-8b-instruct}
+      JUDGE0_API_URL: ${JUDGE0_API_URL:-}
+      JUDGE0_API_KEY: ${JUDGE0_API_KEY:-}
+    volumes:
+      - ./backend/data:/app/data
+      - ./backend/uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: labgenie_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "5173:80"
+
+volumes:
+  postgres_data:
+
